@@ -35,7 +35,7 @@ let messageIdCounter = 1;
 const NightDeskService = {
   // Backend base URL placeholder. Replace this with your deployed backend.
   // Example: "https://nightdesk.yourdomain.com"
-  backendBaseUrl: "http://localhost:3000", // TODO: change for production
+  backendBaseUrl: "https://nodejs-production-268bf.up.railway.app/", // TODO: change for production
 
   /**
    * Call the real backend /api/nightdesk/reply endpoint.
