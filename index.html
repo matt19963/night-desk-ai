@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Night Desk · Secure Leasing Console</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="nd-body">
+  <!-- SECTION: App Shell -->
+  <div class="nd-app">
+    <!-- SECTION: App Header -->
+    <header class="nd-header">
+      <div class="nd-header-left">
+        <div class="nd-app-icon">ND</div>
+        <div>
+          <h1 class="nd-title">Night Desk</h1>
+          <p class="nd-subtitle">Secure Leasing Watch Console · Prototype</p>
+        </div>
+      </div>
+      <div class="nd-header-right">
+        <div class="nd-status-pill" id="statusPill" data-state="on">
+          <span class="nd-status-dot"></span>
+          <span class="nd-status-label">On Watch</span>
+        </div>
+        <button class="nd-icon-button" id="cycleStatusBtn" aria-label="Cycle watch status">
+          ⟳
+        </button>
+      </div>
+    </header>
+
+    <!-- SECTION: Main Layout -->
+    <div class="nd-main">
+      <!-- SECTION: Sidebar Navigation (SwiftUI-style Tab bar) -->
+      <nav class="nd-sidebar" aria-label="Primary">
+        <button class="nd-nav-item nd-nav-item--active" data-screen="dashboard">
+          <span class="nd-nav-label">Dashboard</span>
+        </button>
+        <button class="nd-nav-item" data-screen="chat">
+          <span class="nd-nav-label">Live Chat</span>
+        </button>
+        <button class="nd-nav-item" data-screen="ledger">
+          <span class="nd-nav-label">Ledger &amp; Handoff</span>
+        </button>
+      </nav>
+
+      <!-- SECTION: Content Panels -->
+      <main class="nd-content" aria-live="polite">
+        <!-- DASHBOARD SCREEN -->
+        <section class="nd-screen nd-screen--active" id="screen-dashboard" aria-label="Dashboard">
+          <div class="nd-panel nd-panel--primary">
+            <header class="nd-panel-header">
+              <div>
+                <h2 class="nd-panel-title">Watch Overview</h2>
+                <p class="nd-panel-caption">Monitor tenant and leasing activity at a glance.</p>
+              </div>
+              <div class="nd-time-toggle">
+                <span class="nd-time-label">Clock</span>
+                <button class="nd-toggle" id="timeModeToggle" aria-label="Toggle local vs simulated time">
+                  <span class="nd-toggle-option nd-toggle-option--active" data-mode="local">Local</span>
+                  <span class="nd-toggle-option" data-mode="simulated">Simulated</span>
+                </button>
+              </div>
+            </header>
+
+            <div class="nd-metrics-row">
+              <div class="nd-metric-card">
+                <div class="nd-metric-label">Active thread</div>
+                <div class="nd-metric-value" id="metricActiveThread">Leasing inquiry · 204B</div>
+                <div class="nd-metric-footnote">Streaming via Night Desk AI</div>
+              </div>
+              <div class="nd-metric-card">
+                <div class="nd-metric-label">Current time</div>
+                <div class="nd-metric-value" id="metricTime">--:--</div>
+                <div class="nd-metric-footnote" id="metricTimeMode">Local time</div>
+              </div>
+            </div>
+
+            <div class="nd-quick-row">
+              <div class="nd-quick-group">
+                <h3 class="nd-section-label">Route next message</h3>
+                <div class="nd-chip-row">
+                  <button class="nd-chip nd-chip--primary" data-intent="leasing">Leasing</button>
+                  <button class="nd-chip" data-intent="maintenance">Maintenance</button>
+                  <button class="nd-chip" data-intent="landlord">Landlord inquiry</button>
+                </div>
+                <p class="nd-helper-text">Sets context for the AI’s next reply and Ledger extraction.</p>
+              </div>
+
+              <div class="nd-quick-group">
+                <h3 class="nd-section-label">Watch posture</h3>
+                <p class="nd-helper-text">Status reflects whether Night Desk is expected to respond in real time.</p>
+                <ul class="nd-legend">
+                  <li><span class="nd-legend-dot nd-legend-dot--on"></span>On Watch · respond in &lt; 2 minutes</li>
+                  <li><span class="nd-legend-dot nd-legend-dot--late"></span>Late Watch · batched within the hour</li>
+                  <li><span class="nd-legend-dot nd-legend-dot--off"></span>Off Duty · auto-responder only</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- LIVE CHAT SCREEN -->
+        <section class="nd-screen" id="screen-chat" aria-label="Live Chat">
+          <div class="nd-panel nd-panel--primary nd-panel--fill">
+            <header class="nd-panel-header">
+              <div>
+                <h2 class="nd-panel-title">Live Chat</h2>
+                <p class="nd-panel-caption">Simulated OpenAI-backed two-way messaging.</p>
+              </div>
+              <div class="nd-badge-row">
+                <span class="nd-badge nd-badge--outline">Mock backend: /api/nightdesk/reply</span>
+                <span class="nd-badge nd-badge--subtle">Streaming replies simulated in browser</span>
+              </div>
+            </header>
+
+            <div class="nd-chat-shell">
+              <!-- Chat transcript -->
+              <div class="nd-chat-log" id="chatLog" aria-label="Conversation" role="log"></div>
+
+              <!-- Composer -->
+              <form class="nd-chat-composer" id="chatComposer" autocomplete="off">
+                <label class="nd-field">
+                  <span class="nd-field-label">Message</span>
+                  <div class="nd-input-row">
+                    <textarea
+                      id="chatInput"
+                      class="nd-input nd-input--multiline"
+                      rows="2"
+                      placeholder="Ask about a unit, maintenance issue, or landlord question…"
+                      required
+                    ></textarea>
+                    <button type="submit" class="nd-cta" id="sendBtn">
+                      <span>Send</span>
+                    </button>
+                  </div>
+                </label>
+                <p class="nd-helper-text">In production, this would POST to your backend, which securely calls OpenAI. No API keys live in the client.</p>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- LEDGER + HANDOFF SCREEN -->
+        <section class="nd-screen" id="screen-ledger" aria-label="Ledger and Handoff">
+          <div class="nd-panel nd-panel--stacked">
+            <header class="nd-panel-header">
+              <div>
+                <h2 class="nd-panel-title">Ledger &amp; Morning Handoff</h2>
+                <p class="nd-panel-caption">Simulated extraction from last chat thread.</p>
+              </div>
+              <button class="nd-ghost-cta" id="generateHandoffBtn">Generate from current chat</button>
+            </header>
+
+            <div class="nd-ledger-grid">
+              <section class="nd-ledger-card" aria-label="Extracted Details">
+                <h3 class="nd-section-label">Extracted from conversation</h3>
+                <dl class="nd-ledger-list" id="ledgerDetails">
+                  <div>
+                    <dt>Contact</dt>
+                    <dd data-field="contact">—</dd>
+                  </div>
+                  <div>
+                    <dt>Unit / floorplan</dt>
+                    <dd data-field="unit">—</dd>
+                  </div>
+                  <div>
+                    <dt>Intent</dt>
+                    <dd data-field="intent">—</dd>
+                  </div>
+                  <div>
+                    <dt>Urgency</dt>
+                    <dd data-field="urgency">—</dd>
+                  </div>
+                  <div>
+                    <dt>Best follow-up time</dt>
+                    <dd data-field="followup">—</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section class="nd-ledger-card" aria-label="Morning Handoff Summary">
+                <div class="nd-ledger-header-row">
+                  <h3 class="nd-section-label">Morning Handoff</h3>
+                  <button class="nd-cta nd-cta--secondary" id="openHandoffShare">Open Share Sheet</button>
+                </div>
+                <textarea
+                  id="handoffSummary"
+                  class="nd-input nd-input--multiline nd-input--handoff"
+                  placeholder="Run a chat first, then generate a handoff summary."
+                  readonly
+                ></textarea>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- SECTION: Share Sheet Modal -->
+  <div class="nd-modal-backdrop" id="shareModal" aria-hidden="true">
+    <div class="nd-modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <header class="nd-modal-header">
+        <div>
+          <h2 id="shareTitle" class="nd-modal-title">Share Morning Handoff</h2>
+          <p class="nd-modal-caption">Copy into Notes, Email, or your property management system.</p>
+        </div>
+        <button class="nd-icon-button" id="closeShareModal" aria-label="Close share sheet">✕</button>
+      </header>
+      <div class="nd-modal-body">
+        <textarea id="shareText" class="nd-input nd-input--multiline nd-input--handoff" readonly></textarea>
+      </div>
+      <footer class="nd-modal-footer">
+        <button class="nd-ghost-cta" id="copyShareText">Copy to clipboard</button>
+        <button class="nd-cta" id="closeShareModalPrimary">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
