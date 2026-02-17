@@ -1,6 +1,6 @@
 // ================================
 // Night Desk — script.js (FULL)
-// Paste this entire file as script.js
+// Paste this entire file into public/script.js
 // ================================
 
 // SECTION: Types & State (MVVM-style)
@@ -24,12 +24,22 @@ let messageIdCounter = 1;
 
 // SECTION: Network Layer (real backend + mock fallback)
 const NightDeskService = {
-  // Use SAME-ORIGIN relative API calls so Railway/live works without CORS,
-  // and localhost dev works if your dev server serves the same route.
-  endpointPath: "/api/nightdesk/reply",
+  // ✅ YOUR RAILWAY BACKEND URL (no trailing slash)
+  railwayBaseUrl: "https://nodejs-production-268bf.up.railway.app",
+
+  // If the UI is being served from the same origin (recommended), use relative calls.
+  // If you're hosting UI somewhere else, it will call the Railway URL.
+  getBaseUrl() {
+    const origin = window.location.origin;
+    // If you're already on the Railway domain, don't hardcode; use same-origin.
+    if (origin.includes("up.railway.app")) return "";
+    // Otherwise call the Railway backend directly.
+    return this.railwayBaseUrl;
+  },
 
   async callBackend(message, intent, watchStatus) {
-    const url = this.endpointPath; // RELATIVE path (do not prepend localhost or Railway URL)
+    const base = this.getBaseUrl();
+    const url = `${base}/api/nightdesk/reply`;
 
     let res;
     try {
@@ -46,55 +56,50 @@ const NightDeskService = {
     try {
       data = await res.json();
     } catch {
-      throw new Error("Server did not return valid JSON. (Check backend route and response)");
+      throw new Error("Server did not return valid JSON.");
     }
 
     if (!res.ok) {
-      throw new Error(data?.error || `Server error (HTTP ${res.status}).`);
+      throw new Error(data?.error || data?.reply || `Server error (HTTP ${res.status}).`);
     }
 
     const reply = data?.reply;
     if (typeof reply !== "string" || !reply.trim()) {
-      throw new Error("Server responded but no reply text was returned.");
+      throw new Error("No reply returned from server.");
     }
-
     return reply;
   },
 
+  // Mock fallback (used if server fails)
   getMockReply(userText, context) {
     const lower = userText.toLowerCase();
     const lines = [];
 
-    lines.push(
-      "Thanks for reaching out to Night Desk. I can help with leasing, maintenance, or landlord questions."
-    );
+    lines.push("Thanks for reaching out to Night Desk.");
 
     if (lower.includes("photo") || lower.includes("picture") || lower.includes("photos")) {
-      lines.push("For photos, I can share standard floorplan images for the building.");
-      lines.push("If photos are restricted, I can help schedule an in-person tour.");
+      lines.push("I can share standard floorplan images and help schedule a tour.");
     }
 
     if (lower.includes("leak") || lower.includes("fire") || lower.includes("gas")) {
-      lines.push(
-        "If this is an urgent safety issue (fire, gas, major leak), contact emergency services first and then call the building’s on-call number."
-      );
+      lines.push("If this is urgent (fire, gas, major leak), call 911 and the building’s on-call line.");
     }
 
     if (context.intent === "leasing") {
-      lines.push("Quick questions so I can help:");
-      lines.push("1) What size are you looking for (studio, 1BR, 2BR, etc.)?");
-      lines.push("2) What move-in timeframe are you targeting?");
-      lines.push("3) Any budget range you want to stay within?");
+      lines.push("To help quickly:");
+      lines.push("1) What size unit are you looking for?");
+      lines.push("2) What move-in timeframe?");
+      lines.push("3) Any budget range?");
     } else if (context.intent === "maintenance") {
-      lines.push("Quick questions so we can route this correctly:");
-      lines.push("1) What unit are you in?");
+      lines.push("To route correctly:");
+      lines.push("1) What unit number?");
       lines.push("2) What issue is happening?");
-      lines.push("3) Is anyone home right now, and are there pets inside?");
+      lines.push("3) Is anyone home right now?");
     } else if (context.intent === "landlord") {
-      lines.push("Quick questions so I can log this for the landlord team:");
-      lines.push("1) Are you a current tenant or a prospective tenant?");
-      lines.push("2) What unit or property is this regarding?");
-      lines.push("3) Is this time-sensitive tonight or can it wait until morning?");
+      lines.push("To log this for the owner:");
+      lines.push("1) Tenant or prospective?");
+      lines.push("2) Which unit/property?");
+      lines.push("3) How urgent is it?");
     }
 
     lines.push("Note: I won’t confirm tours or pricing unless it’s documented for this property.");
@@ -102,20 +107,21 @@ const NightDeskService = {
     return lines.join("\n\n");
   },
 
-  async streamReply(textOrMessage, onChunk, options = {}) {
-    const { useBackend = false, intent, watchStatus } = options;
+  // Stream typing effect
+  async streamReply(userMessage, onChunk, options = {}) {
+    const { useBackend = true, intent, watchStatus } = options;
 
-    let fullText = textOrMessage;
+    let fullText = userMessage;
 
     if (useBackend) {
       try {
-        fullText = await this.callBackend(textOrMessage, intent, watchStatus);
+        fullText = await this.callBackend(userMessage, intent, watchStatus);
       } catch (err) {
-        console.error("Backend call failed. Falling back to mock:", err);
+        console.error("Backend failed; using fallback:", err);
         fullText =
           "⚠️ Night Desk AI is unavailable right now.\n" +
           `Reason: ${err?.message || "Unknown error"}\n\n` +
-          this.getMockReply(textOrMessage, { intent, watchStatus });
+          this.getMockReply(userMessage, { intent, watchStatus });
       }
     }
 
@@ -151,7 +157,6 @@ function getCurrentTimeLabel() {
   return { time: formatTime(simulated), modeLabel: "Simulated watch window" };
 }
 
-// CRASH-PROOF: only updates if elements exist
 function applyWatchStatus() {
   const pill = document.getElementById("statusPill");
   if (!pill) return;
@@ -177,7 +182,6 @@ function applyWatchStatus() {
   }
 }
 
-// CRASH-PROOF
 function applyTimeMetrics() {
   const { time, modeLabel } = getCurrentTimeLabel();
   const timeEl = document.getElementById("metricTime");
@@ -206,9 +210,9 @@ function setIntent(intent) {
 // SECTION: Chat Rendering
 function appendMessage({ from, text, timestamp, streamingId }) {
   const log = document.getElementById("chatLog");
-  if (!log) return { id: streamingId || `m-${messageIdCounter++}`, bubble: null };
-
   const msgId = streamingId || `m-${messageIdCounter++}`;
+
+  if (!log) return { id: msgId, bubble: null };
 
   const wrapper = document.createElement("div");
   wrapper.className = `nd-chat-message nd-chat-message--${from}`;
@@ -245,7 +249,7 @@ function updateStreamingBubble(id, newText) {
   }
 }
 
-// SECTION: Ledger Extraction (simulated)
+// SECTION: Ledger Extraction (demo)
 function simulateExtractionFromMessages() {
   const messages = NightDeskState.messages;
   if (!messages.length) {
@@ -285,7 +289,7 @@ function simulateExtractionFromMessages() {
       ? "Batch for morning review"
       : NightDeskState.watchStatus === "late"
       ? "Within the hour"
-      : "As soon as Night Desk comes back online";
+      : "Immediate";
 
   const handoffParts = [];
   handoffParts.push("Night Desk · Morning Handoff");
@@ -298,11 +302,6 @@ function simulateExtractionFromMessages() {
   handoffParts.push("");
   handoffParts.push("Latest tenant message:");
   handoffParts.push(lastUser ? lastUser.text : "—");
-  handoffParts.push("");
-  handoffParts.push("AI guardrails:");
-  handoffParts.push("• Do not claim a tour is scheduled without explicit tenant confirmation.");
-  handoffParts.push("• Do not promise pricing beyond rates configured for this property.");
-  handoffParts.push("• For emergency maintenance, direct to building emergency line + 911 as appropriate.");
 
   return {
     contact,
@@ -342,24 +341,21 @@ function applyLedgerToDom(extraction) {
   NightDeskState.handoffSummary = extraction.handoff;
 }
 
-// SECTION: Share Sheet Modal
+// Modal helpers (optional)
 function openShareModal() {
   const modal = document.getElementById("shareModal");
   const shareText = document.getElementById("shareText");
   if (!modal || !shareText) return;
-  shareText.value =
-    NightDeskState.handoffSummary || "No Morning Handoff has been generated yet.";
+  shareText.value = NightDeskState.handoffSummary || "No handoff generated yet.";
   modal.classList.add("nd-modal-backdrop--visible");
   modal.setAttribute("aria-hidden", "false");
 }
-
 function closeShareModal() {
   const modal = document.getElementById("shareModal");
   if (!modal) return;
   modal.classList.remove("nd-modal-backdrop--visible");
   modal.setAttribute("aria-hidden", "true");
 }
-
 async function copyShareText() {
   const shareText = document.getElementById("shareText");
   if (!shareText) return;
@@ -370,53 +366,43 @@ async function copyShareText() {
   }
 }
 
-// SECTION: Event Handlers & Initialization
+// Initialization
 function initNav() {
   document.querySelectorAll(".nd-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => switchScreen(btn.dataset.screen));
   });
 }
-
 function initTimeToggle() {
   const toggle = document.getElementById("timeModeToggle");
   if (!toggle) return;
-
   const options = toggle.querySelectorAll(".nd-toggle-option");
   options.forEach((opt) => {
     opt.addEventListener("click", () => {
       NightDeskState.timeMode = opt.dataset.mode;
-      options.forEach((o) =>
-        o.classList.toggle("nd-toggle-option--active", o === opt)
-      );
+      options.forEach((o) => o.classList.toggle("nd-toggle-option--active", o === opt));
       applyTimeMetrics();
     });
   });
-
   applyTimeMetrics();
   setInterval(applyTimeMetrics, 30000);
 }
-
 function initStatusCycler() {
   const btn = document.getElementById("cycleStatusBtn");
   if (!btn) return;
-
   btn.addEventListener("click", () => {
     if (NightDeskState.watchStatus === "on") NightDeskState.watchStatus = "late";
     else if (NightDeskState.watchStatus === "late") NightDeskState.watchStatus = "off";
     else NightDeskState.watchStatus = "on";
     applyWatchStatus();
   });
-
   applyWatchStatus();
 }
-
 function initIntentChips() {
   document.querySelectorAll(".nd-chip").forEach((chip) => {
     chip.addEventListener("click", () => setIntent(chip.dataset.intent));
   });
   setIntent(NightDeskState.activeIntent);
 }
-
 function initChat() {
   const form = document.getElementById("chatComposer");
   const input = document.getElementById("chatInput");
@@ -429,12 +415,11 @@ function initChat() {
     const text = input.value.trim();
     if (!text) return;
 
-    const timestamp = formatTime(new Date());
     const userMessage = {
       id: `u-${messageIdCounter++}`,
       from: "user",
       text,
-      timestamp,
+      timestamp: formatTime(new Date()),
     };
     NightDeskState.messages.push(userMessage);
     appendMessage(userMessage);
@@ -461,10 +446,8 @@ function initChat() {
       (chunk, done) => {
         currentText += chunk;
         updateStreamingBubble(id, currentText || "…");
-
         if (done) {
           sendBtn.disabled = false;
-
           NightDeskState.messages.push({
             id,
             from: "agent",
@@ -479,24 +462,21 @@ function initChat() {
 
   appendMessage({
     from: "agent",
-    text: "Night Desk is online. How can I help with your leasing or tenant question tonight?",
+    text: "Night Desk is online. How can I help tonight?",
     timestamp: formatTime(new Date()),
   });
 }
-
 function initLedger() {
   const genBtn = document.getElementById("generateHandoffBtn");
   const openShare = document.getElementById("openHandoffShare");
-  if (!genBtn || !openShare) return;
-
-  genBtn.addEventListener("click", () => {
-    const extraction = simulateExtractionFromMessages();
-    applyLedgerToDom(extraction);
-  });
-
-  openShare.addEventListener("click", () => openShareModal());
+  if (genBtn) {
+    genBtn.addEventListener("click", () => {
+      const extraction = simulateExtractionFromMessages();
+      applyLedgerToDom(extraction);
+    });
+  }
+  if (openShare) openShare.addEventListener("click", openShareModal);
 }
-
 function initModal() {
   const closeA = document.getElementById("closeShareModal");
   const closeB = document.getElementById("closeShareModalPrimary");
@@ -506,7 +486,6 @@ function initModal() {
   if (closeA) closeA.addEventListener("click", closeShareModal);
   if (closeB) closeB.addEventListener("click", closeShareModal);
   if (copyBtn) copyBtn.addEventListener("click", copyShareText);
-
   if (backdrop) {
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) closeShareModal();
@@ -514,7 +493,7 @@ function initModal() {
   }
 }
 
-// SECTION: Boot
+// Boot
 document.addEventListener("DOMContentLoaded", () => {
   initNav();
   initTimeToggle();
