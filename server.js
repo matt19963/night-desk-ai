@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ✅ Serve your Night Desk website files (index.html, style.css, script.js)
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(__dirname));
 
 // ✅ Health check
 app.get("/health", (req, res) => {
@@ -80,13 +80,13 @@ Rules:
 });
 
 // ✅ Make / always serve the actual website, not a text message
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // ✅ If user refreshes on a route, still load the site (optional, but helpful)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
