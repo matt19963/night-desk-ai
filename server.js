@@ -1,19 +1,23 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-// ✅ Homepage so Railway URL doesn't say "Cannot GET /"
-app.get("/", (req, res) => {
-  res.send("Night Desk API is running. Use /health or POST /api/nightdesk/reply");
-});
+// Resolve __dirname in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ✅ Serve your Night Desk website files (index.html, style.css, script.js)
+app.use(express.static(path.join(__dirname, "public")));
 
 // ✅ Health check
 app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ AI endpoint (this is what your script.js should call)
+// ✅ AI endpoint used by your frontend chat box
 app.post("/api/nightdesk/reply", async (req, res) => {
   try {
     const message = String(req.body?.message || "").trim();
@@ -34,7 +38,7 @@ Intent: ${intent}
 Watch status: ${watchStatus}
 
 Rules:
-- Be concise, professional, and helpful.
+- Be concise, professional, helpful.
 - Ask 1–3 clarifying questions if needed.
 - Do NOT invent pricing or confirm tours unless explicitly provided.
 - If emergency maintenance is mentioned (fire, gas, major leak), instruct them to call 911 and the on-call building number.
@@ -44,16 +48,16 @@ Rules:
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         input: [
           { role: "system", content: system },
-          { role: "user", content: message },
+          { role: "user", content: message }
         ],
-        max_output_tokens: 250,
-      }),
+        max_output_tokens: 250
+      })
     });
 
     const data = await r.json();
@@ -75,7 +79,16 @@ Rules:
   }
 });
 
-// ✅ Railway port
+// ✅ Make / always serve the actual website, not a text message
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ✅ If user refreshes on a route, still load the site (optional, but helpful)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Night Desk running on port", PORT);
