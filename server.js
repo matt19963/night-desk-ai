@@ -1,49 +1,78 @@
-const express = require("express");
-const path = require("path");
-const OpenAI = require("openai");
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 app.use(express.json());
 
-// Serve your HTML/CSS/JS from the repo root
-app.use(express.static(__dirname));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// OpenAI client uses Railway env var
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Serve frontend
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-// Chat endpoint your frontend will call
-app.post("/chat", async (req, res) => {
+app.post("/api/nightdesk/reply", async (req, res) => {
   try {
-    const message = (req.body?.message || "").toString();
+    const { message = "", intent = "leasing", watchStatus = "on" } = req.body;
 
-    if (!message.trim()) {
-      return res.status(400).json({ error: "Missing message" });
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        reply: "OPENAI_API_KEY not set in Railway Variables."
+      });
     }
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Night Desk, an after-hours messaging concierge for small landlords/property managers. Be concise, helpful, and professional. Ask 1 short clarifying question if needed.",
-        },
-        { role: "user", content: message },
-      ],
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        input: [
+          {
+            role: "system",
+            content: `You are Night Desk AI for property managers.
+Intent: ${intent}
+Watch status: ${watchStatus}
+Be professional and concise.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        max_output_tokens: 250
+      })
     });
 
-    res.json({ reply: completion.choices[0].message.content });
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return res.status(500).json({
+        reply: "OpenAI request failed. Check logs."
+      });
+    }
+
+    const reply =
+      data.output_text ||
+      data.output?.[0]?.content?.[0]?.text ||
+      "No response returned.";
+
+    res.json({ reply });
+
   } catch (err) {
-    console.error("CHAT ERROR:", err);
-    res.status(500).json({ error: "Chat failed" });
+    console.error("Server error:", err);
+    res.status(500).json({ reply: "Server crashed internally." });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Listening on", PORT));
+app.listen(PORT, () => {
+  console.log("Night Desk running on port", PORT);
+});
